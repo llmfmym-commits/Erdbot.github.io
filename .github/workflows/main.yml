@@ -1,10 +1,13 @@
-name: Build Android APK
+name: Build Bricks Breaker Quest APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -14,67 +17,63 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Fix web folder
+      - name: Check game files
         run: |
           echo "===== Repository files ====="
-          find . -maxdepth 2 -type f | sort
+          find . -maxdepth 3 -type f | sort
 
-          if [ -d "wwww" ] && [ ! -d "www" ]; then
-            echo "Renaming wwww -> www"
-            mv wwww www
-          fi
+          echo "===== Checking www ====="
 
-          if [ ! -f "www/index.html" ]; then
-            echo "ERROR: www/index.html was not found!"
+          if [ -f "www/index.html" ]; then
+            echo "OK: www/index.html found"
+          elif [ -f "index.html" ]; then
+            echo "Found index.html in root. Moving it to www/"
+            mkdir -p www
+            cp index.html www/index.html
+          else
+            echo "ERROR: index.html was not found!"
             exit 1
           fi
 
           echo "===== www contents ====="
-          ls -la www
+          ls -lah www
 
-      - name: Create Capacitor Android project
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Capacitor
         run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Sync Capacitor
-        run: npx cap sync android
-
-      - name: Make Gradle executable
-        run: chmod +x android/gradlew
-
-      - name: Build Debug APK
+      - name: Create Capacitor Config
         run: |
-          cd android
-          ./gradlew assembleDebug --stacktrace
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.bricksbreaker.quest",
+            "appName": "Bricks Breaker Quest",
+            "webDir": "www"
+          }
+          EOF
 
-      - name: Find APK
+      - name: Add Android
         run: |
-          echo "===== APK files ====="
-          find android/app/build/outputs -type f -name "*.apk" -print
+          npx cap add android
+
+      - name: Sync Game
+        run: |
+          npx cap sync android
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Bricks-Breaker-Quest-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
