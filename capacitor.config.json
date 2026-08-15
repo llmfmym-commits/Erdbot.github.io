@@ -1,0 +1,10 @@
+{
+  "appId": "com.neonquest.bricksbreaker",
+  "appName": "Bricks Breaker Quest",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#05030d",
+  "android": {
+    "allowMixedContent": false
+  }
+}
