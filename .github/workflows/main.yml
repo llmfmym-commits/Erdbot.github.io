@@ -17,6 +17,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check game files
+        run: |
+          echo "===== Repository files ====="
+          find . -maxdepth 3 -type f | sort
+
+          echo "===== Checking www ====="
+
+          if [ -f "www/index.html" ]; then
+            echo "OK: www/index.html found"
+          elif [ -f "index.html" ]; then
+            echo "Found index.html in root. Moving it to www/"
+            mkdir -p www
+            cp index.html www/index.html
+          else
+            echo "ERROR: index.html was not found!"
+            exit 1
+          fi
+
+          echo "===== www contents ====="
+          ls -lah www
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,7 +50,7 @@ jobs:
 
       - name: Create Capacitor Config
         run: |
-          cat > capacitor.config.json <<EOF
+          cat > capacitor.config.json <<'EOF'
           {
             "appId": "com.bricksbreaker.quest",
             "appName": "Bricks Breaker Quest",
@@ -41,13 +62,13 @@ jobs:
         run: |
           npx cap add android
 
-      - name: Sync Files
+      - name: Sync Game
         run: |
           npx cap sync android
 
       - name: Build APK
+        working-directory: android
         run: |
-          cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
