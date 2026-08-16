@@ -1,4 +1,4 @@
-name: Build Bricks Breaker Quest APK
+name: Build Bricks Breaker Quest Signed APK
 
 on:
   push:
@@ -66,14 +66,86 @@ jobs:
         run: |
           npx cap sync android
 
-      - name: Build APK
+      # ساخت کلید امضای Release
+      - name: Create Release Keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore release.keystore \
+            -alias "$KEY_ALIAS" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=Bricks Breaker Quest, OU=Game, O=Bricks Breaker Quest, L=Unknown, ST=Unknown, C=US"
+
+      # تنظیم امضای Release
+      - name: Configure Android Signing
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cp release.keystore android/app/release.keystore
+
+          cat >> android/gradle.properties <<EOF
+
+          BRICKS_STORE_FILE=release.keystore
+          BRICKS_STORE_PASSWORD=$KEYSTORE_PASSWORD
+          BRICKS_KEY_ALIAS=$KEY_ALIAS
+          BRICKS_KEY_PASSWORD=$KEY_PASSWORD
+          EOF
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/build.gradle")
+          text = p.read_text()
+
+          text = text.replace(
+              "android {",
+              """android {
+
+              signingConfigs {
+                  release {
+                      storeFile file(project.findProperty("BRICKS_STORE_FILE"))
+                      storePassword project.findProperty("BRICKS_STORE_PASSWORD")
+                      keyAlias project.findProperty("BRICKS_KEY_ALIAS")
+                      keyPassword project.findProperty("BRICKS_KEY_PASSWORD")
+                  }
+              }
+          """,
+              1
+          )
+
+          text = text.replace(
+              "buildTypes {",
+              """buildTypes {
+                  release {
+                      signingConfig signingConfigs.release
+                  }
+              """,
+              1
+          )
+
+          p.write_text(text)
+          PY
+
+      # ساخت APK امضاشده
+      - name: Build Signed Release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
-      - name: Upload APK
+      # آپلود APK
+      - name: Upload Signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: Bricks-Breaker-Quest-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Bricks-Breaker-Quest-Signed-APK
+          path: android/app/build/outputs/apk/release/app-release.apk
